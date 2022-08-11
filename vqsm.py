@@ -54,8 +54,6 @@ class vqsm:
         eps = np.pi/2
         g = np.zeros((self.num_parameters,))
         ext_params = extend_parameters(self.parameters, self.num_qubits)
-        print(self.parameters)
-        print(ext_params)
         for i in range(self.num_parameters):
             e = ei(i*self.num_qubits, len(ext_params))
             pplus = ext_params + eps * e
@@ -89,8 +87,7 @@ class vqsm:
                 return E, saved_g
         return E, g
 
-
-    def run(self, ths, obs_dict={}, filename='algo_result.dat', max_iter=100, opt='sgd', grad='spsa', initial_point=None):
+    def run(self, ths, obs_dict={}, filename='algo_result.dat', max_iter=100, opt='sgd', grad='spsa', initial_point=None, additional_data=None):
         if self.instance.is_statevector:
             expectation = AerPauliExpectation()
         else:
@@ -143,7 +140,6 @@ class vqsm:
             if opt=='sgd':
                 self.parameters = self.parameters - self.shift*g
             if opt == 'adam':
-                print("\n Adam \n")
                 meas_grad = np.asarray(g)
                 learning_vector = np.asarray(adam_gradient(self.parameters, count, m, v, meas_grad))
                 self.parameters = self.parameters - learning_vector
@@ -174,4 +170,7 @@ class vqsm:
         log_data['learning_rate'] = self.shift
         log_data['nlayer'] = self.depth
         log_data['threshold'] = ths
+        if additional_data != None:
+            for el in additional_data:
+                log_data[el] = additional_data[el]
         json.dump(log_data, open(filename, 'w+'))
