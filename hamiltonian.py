@@ -44,6 +44,21 @@ def generate_XYZ(J_x,J_y,J_z,field,n_spins=3,pbc=True):
         H = H + PauliOp(field_list[i], field_coeff[i])
     return H
 
+def ising_2D_hamiltonian(J, h, neighbours, nspins):
+    H = PauliOp(generate_pauli([0], [], nspins), h)
+    for i in range(1, nspins):
+        H = H + PauliOp(generate_pauli([i], [], nspins), h)
+    for nei in neighbours:
+        i, j = nei
+        H = H + PauliOp(generate_pauli([], [i, j], nspins), J)
+    return H
+
+def ising_2D_hamiltonian_for_ancilla(J, h, neighbours, nspins):
+    H = ising_2D_hamiltonian(J, h, neighbours, nspins)
+    for _ in range(nspins):
+        H = I^H
+    return H
+
 def hamiltonian_for_ancilla(J_x,J_y,J_z,field,n_spins=3,pbc=True):
     H = generate_XYZ(J_x,J_y,J_z,field,n_spins=n_spins,pbc=pbc)
     for _ in range(n_spins):

@@ -11,7 +11,7 @@ from adam_gradient import adam_gradient
 from initialise_circuit import ansatz_more_params
 
 class vqsm:
-    def __init__(self, hamiltonian, ansatz, ansatz_reps, parameters, lr, instance, shots, beta, expectator):
+    def __init__(self, hamiltonian, ansatz, ansatz_reps, parameters, lr, instance, shots, beta, expectator, connectivity):
         self.hamiltonian = hamiltonian
         self.instance = instance
         self.parameters = parameters
@@ -23,7 +23,8 @@ class vqsm:
         self.num_qubits = int(hamiltonian.num_qubits/2)
         self.beta = beta
         self.params_vec = ParameterVector('p', self.num_parameters)
-        self.ansatz = ansatz(self.params_vec, (self.num_qubits, self.depth), self.beta)
+        self.connectivity = connectivity
+        self.ansatz = ansatz(self.params_vec, (self.num_qubits, self.depth, self.connectivity), self.beta)
 
     def energy(self, p):
         circuit = self.ansatz.assign_parameters({self.params_vec: p})

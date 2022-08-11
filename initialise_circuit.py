@@ -44,3 +44,19 @@ def ansatz_adia(parameters, circ_params, beta):
         count = count + 1
         circuit.barrier()
     return circuit
+
+def ansatz_adia_connectivity(parameters, circ_params, beta):
+    nspins, nlayer, neighbours = circ_params
+    circuit = initialise_q_circuit(nspins, beta)
+    circuit.barrier()
+    count = 0
+    for j in range(nlayer):
+        for i in range(nspins):
+            circuit.rx(parameters[count], i)
+        count = count + 1
+        for nei in neighbours:
+            i, j = nei
+            circuit.rzz(parameters[count],i,j)
+        count = count + 1
+        circuit.barrier()
+    return circuit
