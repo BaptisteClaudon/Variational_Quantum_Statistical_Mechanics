@@ -1,7 +1,7 @@
 import numpy as np
 import scipy
 from scipy.linalg import expm
-from hamiltonian import generate_XYZ
+from hamiltonian import generate_XYZ, ising_2D_hamiltonian, heisenberg_2D_hamiltonian
 
 def partition_function(J,h,N,T):
     '''
@@ -145,7 +145,7 @@ def beta_times_fe(beta, hamiltonian, entropy):
     f = - np.log(Z) - beta * np.trace(rho @ hamiltonian) + entropy
     return f
 
-def get_exact_and_best_for_ising(beta, nspins, initial_parameters=(0., -1.), final_parameters=(-1., -1.)):
+def get_exact_and_best_for_ising(beta, nspins, initial_parameters=(0., -1.), final_parameters=(-1., -1.), connectivity=None):
     '''
     Gets quasi-Gibbs and Gibbs energy for the J=h=1 quantum 1D pbc Ising model.
     :param beta: real positive number, inverse temperature
@@ -157,9 +157,37 @@ def get_exact_and_best_for_ising(beta, nspins, initial_parameters=(0., -1.), fin
     J_0, h_0 = initial_parameters
     J, h = final_parameters
     anaent = ana_entropy(J=J_0,h=h_0,N=nspins,T=1./beta)
-    H0 = generate_XYZ(0.,0.,J_0,h_0,n_spins=nspins,pbc=True)
-    H = generate_XYZ(0.,0.,J,h,n_spins=nspins,pbc=True)
+    if connectivity != None:
+        H0 = ising_2D_hamiltonian(J_0, h_0, connectivity, nspins)
+        H = ising_2D_hamiltonian(J, h, connectivity, nspins)
+    else:
+        H0 = generate_XYZ(0.,0.,J_0,h_0,n_spins=nspins,pbc=True)
+        H = generate_XYZ(0.,0.,J,h,n_spins=nspins,pbc=True)
     betaf = find_beta(H.to_matrix(), anaent, beta)
     exact = exact_energy(betaf, H.to_matrix())
     best = best_approx(beta, H, H0)
     return np.real(exact), np.real(best)
+
+def heisenberg_initial_entropy(nspins, beta):
+    Z = 2**nspins*np.cosh(beta)**nspins
+    delta = 1e-5
+    Zplus = 2**nspins*np.cosh(beta+.5*delta)**nspins
+    Zminus = 2**nspins*np.cosh(beta-.5*delta)**nspins
+    E = (1./beta ** 2) * (np.log(Zplus) - np.log(Zminus)) / delta
+    f = - np.log(Z)/beta
+    s = (E-f)*beta
+    return s
+
+def get_exact_and_best_for_heisenberg(beta, nspins, final_parameters=(1., 1.), connectivity=None):
+    J1, J2 = final_parameters
+    anaent = heisenberg_initial_entropy(nspins, beta)
+    hfields = np.ones(nspins)
+    for k in range(int(nspins/2)):
+        hfields[2*k+1] = -1
+    H0 = heisenberg_2D_hamiltonian(0., 0., hfields, connectivity, nspins)
+    H = heisenberg_2D_hamiltonian(J1, J2, hfields, connectivity, nspins)
+    betaf = find_beta(H.to_matrix(), anaent, beta)
+    exact = exact_energy(betaf, H.to_matrix())
+    best = best_approx(beta, H, H0)
+    return np.real(exact), np.real(best)
+

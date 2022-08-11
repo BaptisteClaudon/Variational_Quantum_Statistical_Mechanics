@@ -171,6 +171,7 @@ class vqsm:
         log_data['learning_rate'] = self.shift
         log_data['nlayer'] = self.depth
         log_data['threshold'] = ths
+        log_data['connectivity'] = self.connectivity
         if additional_data != None:
             for el in additional_data:
                 log_data[el] = additional_data[el]

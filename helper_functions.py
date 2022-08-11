@@ -34,6 +34,30 @@ def nearest_neighbours_rectangle(Lx, Ly):
     neighbours = list(dict.fromkeys(neighbours))
     return neighbours
 
+def second_nearest_neighbours_rectangle(Lx, Ly):
+    neighbours = []
+    for a in range(Lx):
+        for b in range(Ly):
+            Y = ((a + 1) % Lx) * Ly + (b + 1) % Ly
+            if a*Ly + b < Y:
+                neighbours.append((a*Ly + b, Y))
+            Y = ((a + 1) % Lx) * Ly + (b - 1) % Ly
+            if a*Ly + b < Y:
+                neighbours.append((a*Ly + b, Y))
+            Y = ((a - 1) % Lx) * Ly + (b + 1) % Ly
+            if a*Ly + b < Y:
+                neighbours.append((a*Ly + b, Y))
+            Y = ((a - 1) % Lx) * Ly + (b + 1) % Ly
+            if a*Ly + b < Y:
+                neighbours.append((a*Ly + b, Y))
+    neighbours = list(dict.fromkeys(neighbours))
+    return neighbours
+
 def neirest_neighbours_line(Lx):
     neighbours = [(i, (i+1)%Lx) for i in range(Lx)]
     return neighbours
+
+def heisenberg_rectangle_connectivity(Lx, Ly):
+    connectivity = nearest_neighbours_rectangle(Lx, Ly), second_nearest_neighbours_rectangle(Lx, Ly)
+    return connectivity
+

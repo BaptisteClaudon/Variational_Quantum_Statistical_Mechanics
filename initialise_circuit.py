@@ -15,6 +15,16 @@ def initialise_q_circuit(nspins, beta):
         qc.h(k)
     return qc
 
+def initialise_q_circuit_heisenberg(nspins, beta):
+    theta = get_correct_proba(beta)
+    qc = QuantumCircuit(2*nspins)
+    for k in range(nspins):
+        qc.rx(theta=theta, qubit=nspins+k)
+        qc.cx(control_qubit=nspins+k, target_qubit=k)
+        if k%2==0:
+            qc.x(k)
+    return qc
+
 def ansatz_more_params(parameters, circ_params, beta):
     nspins, n_layer = circ_params
     circuit = initialise_q_circuit(nspins, beta)
@@ -57,6 +67,31 @@ def ansatz_adia_connectivity(parameters, circ_params, beta):
         for nei in neighbours:
             i, j = nei
             circuit.rzz(parameters[count],i,j)
+        count = count + 1
+        circuit.barrier()
+    return circuit
+
+def ansatz_adia_connectivity_heisenberg(parameters, circ_params, beta):
+    nspins, nlayer, neighbours = circ_params
+    first_nei, second_nei = neighbours
+    circuit = initialise_q_circuit_heisenberg(nspins, beta)
+    circuit.barrier()
+    count = 0
+    for j in range(nlayer):
+        for i in range(nspins):
+            circuit.rz(-(-1)**i*parameters[count], i)
+        count = count + 1
+        for nei in first_nei:
+            i, j = nei
+            circuit.rxx(-parameters[count],i,j)
+            circuit.ryy(-parameters[count],i,j)
+            circuit.rzz(-parameters[count],i,j)
+        count = count + 1
+        for nei in second_nei:
+            i, j = nei
+            circuit.rxx(-parameters[count],i,j)
+            circuit.ryy(-parameters[count],i,j)
+            circuit.rzz(-parameters[count],i,j)
         count = count + 1
         circuit.barrier()
     return circuit

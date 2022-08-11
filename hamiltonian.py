@@ -64,3 +64,26 @@ def hamiltonian_for_ancilla(J_x,J_y,J_z,field,n_spins=3,pbc=True):
     for _ in range(n_spins):
         H = I^H
     return H
+
+def heisenberg_2D_hamiltonian(J1, J2, h_fields, connectivity, nspins):
+    H = PauliOp(generate_pauli([0], [], nspins), h_fields[0])
+    for i in range(1, nspins):
+        H = H + PauliOp(generate_pauli([i], [], nspins), h_fields[i])
+    first_neighbours, second_neighbours = connectivity
+    for nei in first_neighbours:
+        i, j = nei
+        H = H + PauliOp(generate_pauli([i, j], [], nspins), J1) # X
+        H = H + PauliOp(generate_pauli([i, j], [i, j], nspins), J1) # Y
+        H = H + PauliOp(generate_pauli([], [i, j], nspins), J1) # Z
+    for nei in second_neighbours:
+        i, j = nei
+        H = H + PauliOp(generate_pauli([i, j], [], nspins), J2) # X
+        H = H + PauliOp(generate_pauli([i, j], [i, j], nspins), J2) # Y
+        H = H + PauliOp(generate_pauli([], [i, j], nspins), J2) # Z
+    return H
+
+def heisenberg_2D_hamiltonian_for_ancilla(J1, J2, h_fields, connectivity, nspins):
+    H = heisenberg_2D_hamiltonian(J1, J2, h_fields, connectivity, nspins)
+    for _ in range(nspins):
+        H = I^H
+    return H

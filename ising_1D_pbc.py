@@ -7,16 +7,16 @@ from vqsm import *
 from qiskit.opflow.expectations import PauliExpectation, AerPauliExpectation
 from helper_functions import neirest_neighbours_line
 
-spins = 3
-ths = 1e-6
-depth = 3
+spins = 6
+ths = 1e-5
+depth = 14
 nparams = 2*depth
 final_J = 1.5
 initial_params = np.zeros(nparams)
 for lay in range(depth):
     initial_params[2*lay] = 1.
     initial_params[2*lay+1] = (lay+1)/depth*final_J
-lr = 1e-2
+lr = 1e-3
 hamiltonian = hamiltonian_for_ancilla(J_x=0, J_y=0., J_z=-final_J, field=-1., n_spins=spins, pbc=True)
 shots = 2048*4
 backend = Aer.get_backend('statevector_simulator')
