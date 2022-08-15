@@ -7,8 +7,8 @@ from vqsm import *
 from qiskit.opflow.expectations import PauliExpectation, AerPauliExpectation
 from helper_functions import neirest_neighbours_line
 
-spins = 6
-ths = 1e-5
+spins = 13
+ths = 1e-4
 depth = 14
 nparams = 2*depth
 final_J = 1.5

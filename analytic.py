@@ -2,6 +2,10 @@ import numpy as np
 import scipy
 from scipy.linalg import expm
 from hamiltonian import generate_XYZ, ising_2D_hamiltonian, heisenberg_2D_hamiltonian
+from scipy.sparse import csr_matrix
+from scipy.sparse.linalg import eigsh
+from scipy.sparse.linalg import norm
+from operator import itemgetter
 
 def partition_function(J,h,N,T):
     '''
@@ -66,7 +70,7 @@ def ana_c(J,h,N,T):
     delta = 1e-5
     return -(ana_mean_energy(J,h,N,T+.5*delta)-ana_mean_energy(J,h,N,T-.5*delta))/delta - 1/T/T*2*ana_mean_energy(J,h,N,T)**2
 
-def best_approx(beta, H, H0):
+def best_approx(beta, H0, H=None):
     '''
     Concerns the 1D quantum Ising model with periodic boundary conditions. Computes the energy of the quasi-Gibbs state.
     :param beta: real number, initial inverse temperature
@@ -74,12 +78,16 @@ def best_approx(beta, H, H0):
     :param H0: PauliOp, initial hamiltonian
     :return: real number, quasi-Gibbs energy
     '''
-    rho0 = thermal_state(H0.to_matrix(), 1./beta)
-    ps = scipy.linalg.eigh(rho0, eigvals_only=True)
+    #rho0 = thermal_state(H0, 1./beta)
+    ps = eigsh(H0, return_eigenvectors=False)
     ps.sort()
-    energies = scipy.linalg.eigh(H.to_matrix(), eigvals_only=True)
-    energies.sort()
-    ps = np.flip(ps)
+    if H != None:
+        energies = eigsh(H, return_eigenvectors=False)
+        energies.sort()
+    else:
+        energies = ps
+    ps = np.exp(-beta*ps)
+    ps *= 1./sum(ps)
     return np.dot(ps, energies)
 
 def thermal_state(hamiltonian, temperature):
@@ -94,7 +102,7 @@ def thermal_state(hamiltonian, temperature):
     t = np.matrix.trace(e)
     return e/t
 
-def find_beta(hamiltonian, entropy, beta0):
+def find_beta(hamiltonian, entropy, beta0, hamiltonian0):
     '''
     Finds inverse temperature at which the hamiltonian thermal state has a given entropy.
     :param hamiltonian: numpy hermitian matrix, hamiltonian
@@ -103,13 +111,32 @@ def find_beta(hamiltonian, entropy, beta0):
     :return: real number, final inverse temperature
     '''
     try:
-        b = np.real(scipy.optimize.newton(func=beta_times_fe, x0=beta0, args=(hamiltonian, entropy)))
+        #b = np.real(scipy.optimize.newton(func=beta_times_fe, x0=beta0, args=(hamiltonian, entropy)))
+        left = 1e-5
+        right = 10
+        b = scipy.optimize.toms748(f=beta_times_fe, a=left, b=right, args=(hamiltonian, entropy, hamiltonian0, beta0))
     except RuntimeError:
         print("scipy.optimize failed to find the final beta.")
         b = beta0
     except ValueError:
+        print("scipy.optimize failed to find the final beta.")
+        betarange = np.linspace(left, right, 500)
+        vals = [np.abs(beta_times_fe(beta, hamiltonian, entropy, hamiltonian0, beta0)) for beta in betarange]
+        from matplotlib import pyplot as plt
+        plt.plot(betarange, vals)
+        b = betarange[min(enumerate(vals), key=itemgetter(1))[0]]
+    '''    
+    except ValueError:
         print("Value error occured.")
-        b = beta0
+        L = np.abs(beta_times_fe(left, hamiltonian, entropy))
+        print("Left free energy error: ", L)
+        R = np.abs(beta_times_fe(right, hamiltonian, entropy))
+        print("Left free energy error: ", R)
+        if L < R:
+            b = left
+        else:
+            b = right
+    '''
     print("Final beta: ", b)
     return b
 
@@ -125,7 +152,7 @@ def exact_energy(beta, hamiltonian):
     rho = exp / Z
     return np.trace(rho@hamiltonian)
 
-def beta_times_fe(beta, hamiltonian, entropy):
+def beta_times_fe(beta, hamiltonian, entropy, hamiltonian0, beta0):
     '''
     Product between beta and free energy
     :param beta: real positive number, inverse temperature
@@ -134,15 +161,21 @@ def beta_times_fe(beta, hamiltonian, entropy):
     :return: real number, product
     '''
     try:
-        exp = scipy.linalg.expm(-beta * hamiltonian)
+        #exp = scipy.linalg.expm(-beta * hamiltonian)
+        ps = eigsh(hamiltonian, return_eigenvectors=False)
     except ValueError:
-        exp = 1.
+        ps = [1.]
         print("Value error.")
         print("beta: ",beta)
         print("hamiltonian: ",hamiltonian)
-    Z = np.trace(exp)
-    rho = exp / Z
-    f = - np.log(Z) - beta * np.trace(rho @ hamiltonian) + entropy
+    try:
+        ps = np.exp(-beta * ps)
+        Z = sum(ps)
+        E = best_approx(beta0, H0=hamiltonian0, H=hamiltonian)
+        f = - np.log(Z) - beta * E + entropy
+    except RuntimeWarning:
+        print("Z exploded")
+        f = 0
     return f
 
 def get_exact_and_best_for_ising(beta, nspins, initial_parameters=(0., -1.), final_parameters=(-1., -1.), connectivity=None):
@@ -158,17 +191,25 @@ def get_exact_and_best_for_ising(beta, nspins, initial_parameters=(0., -1.), fin
     J, h = final_parameters
     anaent = ana_entropy(J=J_0,h=h_0,N=nspins,T=1./beta)
     if connectivity != None:
-        H0 = ising_2D_hamiltonian(J_0, h_0, connectivity, nspins)
-        H = ising_2D_hamiltonian(J, h, connectivity, nspins)
+        H0 = ising_sparse_hamiltonian(J_0, h_0, connectivity, nspins)
+        H = ising_sparse_hamiltonian(J, h, connectivity, nspins)
     else:
         H0 = generate_XYZ(0.,0.,J_0,h_0,n_spins=nspins,pbc=True)
+        H0 = H0.to_matrix()
         H = generate_XYZ(0.,0.,J,h,n_spins=nspins,pbc=True)
-    betaf = find_beta(H.to_matrix(), anaent, beta)
-    exact = exact_energy(betaf, H.to_matrix())
-    best = best_approx(beta, H, H0)
+        H = H.to_matrix()
+    betaf = find_beta(H, anaent, beta, H0)
+    exact = best_approx(betaf, H)
+    best = best_approx(beta, H0, H)
     return np.real(exact), np.real(best)
 
 def heisenberg_initial_entropy(nspins, beta):
+    '''
+    Get entropy of staggered magnetic field model.
+    :param nspins: positive integer, number of spins
+    :param beta: positive real number, inverse temperature
+    :return: entropy for which to find the corresponding beta, in the Heisenberg case
+    '''
     Z = 2**nspins*np.cosh(beta)**nspins
     delta = 1e-5
     Zplus = 2**nspins*np.cosh(beta+.5*delta)**nspins
@@ -179,6 +220,14 @@ def heisenberg_initial_entropy(nspins, beta):
     return s
 
 def get_exact_and_best_for_heisenberg(beta, nspins, final_parameters=(1., 1.), connectivity=None):
+    '''
+    Computes the Gibbbs and quasi-Gibbs energies in the Heisenberg case.
+    :param beta: positive real number, inverse temperature
+    :param nspins: positive integer, number of spins
+    :param final_parameters: R^2, J1 and J2 parameters
+    :param connectivity: two list of couple of positive integers, representing the first and second nearest neighbours
+    :return: two real numbers, Gibbs and qGibbs energies
+    '''
     J1, J2 = final_parameters
     anaent = heisenberg_initial_entropy(nspins, beta)
     hfields = np.ones(nspins)
@@ -186,8 +235,41 @@ def get_exact_and_best_for_heisenberg(beta, nspins, final_parameters=(1., 1.), c
         hfields[2*k+1] = -1
     H0 = heisenberg_2D_hamiltonian(0., 0., hfields, connectivity, nspins)
     H = heisenberg_2D_hamiltonian(J1, J2, hfields, connectivity, nspins)
-    betaf = find_beta(H.to_matrix(), anaent, beta)
+    if beta < 3:
+        betaf = find_beta(H.to_matrix(), anaent, beta)
+    else:
+        betaf = beta
     exact = exact_energy(betaf, H.to_matrix())
     best = best_approx(beta, H, H0)
     return np.real(exact), np.real(best)
+
+def list_paulis(N, X=csr_matrix([[0,1],[1,0]])):
+    l = []
+    I = csr_matrix(scipy.sparse.identity(2))
+    for p in range(N):
+        op = X
+        for q in range(p):
+            op = scipy.sparse.kron(I, op)
+        for q in range(p+1,N):
+            op = scipy.sparse.kron(op, I)
+        l.append(op)
+    return l
+
+def list_xis(N):
+    return list_paulis(N)
+
+def list_yis(N):
+    return list_paulis(N, csr_matrix([[0,-1.j],[1.j,0]]))
+
+def list_zis(N):
+    return list_paulis(N, csr_matrix([[1,0],[0,-1]]))
+
+def ising_sparse_hamiltonian(J=1., Gamma=1., neighbours=[], N=3):
+    lx = list_xis(N)
+    lz = list_zis(N)
+    H = Gamma*sum(lx)
+    for nei in neighbours:
+        i, j = nei
+        H += J*lz[i]@lz[j]
+    return H
 
